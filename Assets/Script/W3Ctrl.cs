@@ -37,6 +37,10 @@ namespace GigaTrax
 			set{ W3Ctrl_setInt("TouchCard", value? 1: 0); }
 			get{ return (W3Ctrl_getInt("TouchCard") != 0)? true: false; }
 		}
+		public bool ReadyOK{
+			//set{ W3Ctrl_setInt("ReadyOK", value? 1: 0); }
+			get{ return (W3Ctrl_getInt("ReadyOK") != 0)? true: false; }
+		}
 
 		class ParamSet {
 			public ParamSet(string name_){

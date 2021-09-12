@@ -15,16 +15,8 @@ public class Analyse_Main : MonoBehaviour {
 
 	// Use this for initialization
 	void Start(){
-/*
-		// Display.displays[0] は主要デフォルトディスプレイで、常に ON。
-		// 追加ディスプレイが可能かを確認し、それぞれをアクティベートします。
-		if( Display.displays.Length > 1 )
-			Display.displays[1].Activate();
-		Display.displays[0].Activate();
-		//if( Display.displays.Length > 2 )
-		//	Display.displays[2].Activate();
-*/
-		m_objInfo2 = prefabMainCanvas.transform.Find("Info2").gameObject;
+		m_objHitInfo = prefabMainCanvas.transform.Find("HitInfo").gameObject;
+		m_objHitInfo.SetActive(false);
 
 		m_objGage = prefabMainCanvas.transform.Find("Gage").gameObject;
 		m_objGage.SetActive(false);
@@ -87,9 +79,9 @@ public class Analyse_Main : MonoBehaviour {
 			MainFrame.PVA_setInt("Pitch_Timeout", (int)(fPitch_Timeout * 1000.0f));
 		}
 		else{
-			MainFrame.PVA_setInt("CalcDuration", 0);
 			MainFrame.PVA_setInt("Pitch_Timeout", 0);
 		}
+		MainFrame.PVA_setInt("CalcDuration", 0);
 		MainFrame.PVA_setFloat("XRange", MainFrame.getSysFloat("XRange"));
 		MainFrame.PVA_setFloat("ZRange", MainFrame.getSysFloat("ZRange"));
 		MainFrame.PVA_setInt("StrikeZone", 0);
@@ -102,12 +94,10 @@ public class Analyse_Main : MonoBehaviour {
 
 		m_dInit = MainFrame.getSysFloat("InitDuration");
 		if( !m_bServe ){
-			m_dStart = (float)MainFrame.PVA_getInt("CalcDuration");
-			if( m_dStart <= 0 )
-				m_dStart = StartDuration;
+			m_dStart = MainFrame.getSysFloat("ReceiveInterval");
 		}
 		else{
-			m_dStart = MainFrame.getSysFloat("ServeTime");
+			m_dStart = MainFrame.getSysFloat("ServeInterval");
 		}
 		m_dCountDown = MainFrame.getSysFloat("CountDown");
 		m_dResultDuration = MainFrame.getSysFloat("ResultDuration");
@@ -116,12 +106,6 @@ public class Analyse_Main : MonoBehaviour {
 
 		m_dPitchONTime = MainFrame.getMachineFloat("PitchONTime");
 
-		if( m_nGameMode != GameMode.Random ){
-			m_dShootInterval = MainFrame.getSysFloat("ShootInterval");
-		}
-		else{
-			m_dShootInterval = MainFrame.getSysFloat("ShootInterval_Random");
-		}
 		if( !m_bServe ){
 			m_fCameraPosY = MainFrame.getSysFloat("Receive_CameraPosY");
 			m_fCameraPosZ = MainFrame.getSysFloat("Receive_CameraPosZ");
@@ -129,28 +113,15 @@ public class Analyse_Main : MonoBehaviour {
 			m_fCameraRotY = 0;
 			m_fCameraFOV = MainFrame.getSysFloat("Receive_CameraFOV");
 			m_fShootPosZ = MainFrame.getSysFloat("Receive_ShootPosZ");
-			m_bUseDizzView = false;
 		}
 		else{
-			if( m_bUseDizzView ){
-				transform.localPosition = new Vector3(0, -10, 0);
-				transform.eulerAngles = new Vector3(90, 0, 0);
-
-				GameObject objDizzView = prefabDizzView.gameObject;
-				objDizzView.SetActive( true );
-
-				GameObject objDizzCanvas = prefabDizzCanvas.gameObject;
-				objDizzCanvas.SetActive( true );
-			}
-			else{
-				m_fCameraPosY = MainFrame.getSysFloat("Serve_CameraPosY");
-				m_fCameraPosZ = MainFrame.getSysFloat("Serve_CameraPosZ");
-				m_fCameraRotX = MainFrame.getSysFloat("Serve_CameraRotX");
-				m_fCameraRotY = 0;
-				m_fCameraFOV = MainFrame.getSysFloat("Serve_CameraFOV");
-				m_fShootPosX = 0;
-				m_fShootPosZ = MainFrame.getSysFloat("Serve_ShootPosZ");
-			}
+			m_fCameraPosY = MainFrame.getSysFloat("Serve_CameraPosY");
+			m_fCameraPosZ = MainFrame.getSysFloat("Serve_CameraPosZ");
+			m_fCameraRotX = MainFrame.getSysFloat("Serve_CameraRotX");
+			m_fCameraRotY = 0;
+			m_fCameraFOV = MainFrame.getSysFloat("Serve_CameraFOV");
+			m_fShootPosX = 0;
+			m_fShootPosZ = MainFrame.getSysFloat("Serve_ShootPosZ");
 		}
 
 		m_fHawkEyeDist = MainFrame.getSysFloat("HawkEyeDist");
@@ -183,7 +154,6 @@ public class Analyse_Main : MonoBehaviour {
 
 		MainFrame.PlayInfo_start( null );
 
-		initHitRecord();
 		//initStrikeMark();
 
 		switch( m_nGameMode ){
@@ -208,7 +178,9 @@ public class Analyse_Main : MonoBehaviour {
 		//setSceneIdle();
 
 		setPromp( Prompt_Init );
+
 		setGamePhase( GamePhase_Init );
+
 		setSensorPhase( SensorPhase_Busy );
 	}
 	void OnDestroy(){
@@ -223,11 +195,13 @@ public class Analyse_Main : MonoBehaviour {
 
 	// Update is called once per frame
 	void Update(){
+#if !UNITY_EDITOR
 		GigaTrax.PVA.APIResult status = MainFrame.PVA_getCamraStatus();
 		if( status != GigaTrax.PVA.APIResult.OK ){
 			//GigaTrax.Debug.Log( "CamraStatus" + status );
 			return;
 		}
+#endif
 		if( !m_bCtrlPower ){
 			if( m_bServe ){
 				m_strDir = strCenter;
@@ -290,10 +264,11 @@ public class Analyse_Main : MonoBehaviour {
 		case SensorPhase_Start:{
 			GigaTrax.PVA.APIResult ret = MainFrame.PVA_getDetect( ref m_detect );
 			if( ret == GigaTrax.PVA.APIResult.OK ){
-				m_objGage.SetActive(false);
-				MainFrame.PVA_endBall();
-				setSensorPhase(SensorPhase_Busy);
-				//setGamePhase( GamePhase_Hit );
+				//m_objGage.SetActive(false);
+
+				//MainFrame.PVA_endBall();
+				//m_bSensor = false;
+				//setSensorPhase(SensorPhase_Busy);
 
 				HitRecord record = addHitRecord();
 
@@ -324,149 +299,43 @@ public class Analyse_Main : MonoBehaviour {
 					);
 					startHit( record, pos, dir, speed );
 
-					setGamePhase( GamePhase_Hit );
-
-					if( m_nGameLimit == GameLimit_Ball ){
-						m_nRestBall--;
-						updateRest();
-						if( m_nRestBall <= 0 )
-							m_bGameEnd = true;
-					}
+					m_nHitResult = HitResult_Hit;
 				}
 				else{
 					record.result = Result_Fault;
-					//MainFrame.PlayInfo_add( record.result, 0 );
+					m_nHitResult = HitResult_Fail;
 
-					setGamePhase( GamePhase_Idle );
-					resetView();
-					//setSceneIdle();
+					//MainFrame.PlayInfo_add( record.result, 0 );
 				}
-				updateHitRecord();
+				//updateHitRecord();
 			}
 			break;}
 		}
 
-		if( m_nGameLimit == GameLimit_Time ){
-			switch( m_nGamePhase ){
-			case GamePhase_Init:
-			case GamePhase_Result:
-				break;
-			default:
-				if( m_fRestTime > 0 ){
-					m_fRestTime -= Time.deltaTime;
-					if( m_fRestTime < 0 )
-						m_fRestTime = 0;
-					if( m_fRestTime == 0 )
-						m_bGameEnd = true;
-					updateRest();
-				}
-				if( !m_bGameEnd ){
-					if( MainFrame.Key_isAlt(RawKey.C) ){
-						m_bGameEnd = true;
-					}
-				}
-				break;
-			}
-		}
 		switch( m_nGamePhase ){
 		case GamePhase_Init:
 			m_dTime -= Time.deltaTime;
-			//chkPitchON();
-			if( m_dTime <= 0 ){
-				setGamePhase( GamePhase_Idle );
-			}
-			break;
-		case GamePhase_Idle:
-			if( m_bGameEnd ){
-				setGamePhase( GamePhase_Result );
-				break;
-			}
-			/*if( MainFrame.Key_isAlt(RawKey.B) ){
-				setGamePhase( GamePhase_CountDown );
-				break;
-			}*/
-			if( m_nSensorPhase == SensorPhase_Ready ){
-				if( !m_bServe ){
-					m_dTime -= Time.deltaTime;
-					chkPitchON();
-					if( m_dTime <= 0 )
-						setGamePhase( GamePhase_CountDown );
-				}
-				else{
-					StartCoroutine("ShowWarning");
-					MainFrame.W3Ctrl_PitchON();
-
-					MainFrame.PVA_startBall();
-					setSensorPhase( SensorPhase_Start );
-
-					setGamePhase( GamePhase_Start );
-					setPromp( Prompt_Serve );
-				}
-			}
-			break;
-		case GamePhase_CountDown:{
-			m_dTime -= Time.deltaTime;
-			chkPitchON();
-
-			if( !m_bEnemyServe ){
-				if( m_dTime < m_dEnemyServeTime ){
-					startEnemyServe();
-					m_bEnemyServe = true;
-				}
-			}
-			if( !m_bSensorStart ){
-				if( m_dTime < SensorStartTime ){
-					MainFrame.PVA_startBall();
-					setSensorPhase( SensorPhase_Start );
-					m_bSensorStart = true;
-				}
-			}
-
-			float ratio = m_dTime / m_dCountDown;
-			UnityEngine.UI.Image image = m_objGage.GetComponent<UnityEngine.UI.Image>();
-			if( ratio < 0 )
-				ratio = 0;
-			image.fillAmount = ratio;
-			//prefabSpeed.text = "ratio: " + ratio.ToString("f2");
-
-			if( ratio == 0 ){
+			if( m_dTime <= 0 )
 				setGamePhase( GamePhase_Start );
-				m_objGage.SetActive(false);
-				setPromp( Prompt_None );
-			}
-			break;}
-
-		case GamePhase_Start:{
-			bool end = false;
-			if( MainFrame.Key_isCtrl(RawKey.S) ){
-				MainFrame.PVA_setInt("SaveBin", 1);
-				end = true;
-			}
-			else{
-				m_dTime -= Time.deltaTime;
-				if( m_dTime <= 0 ){
-					end = true;
-				}
-			}
-			if( end ){
-				MainFrame.PVA_endBall();
-				setSensorPhase( SensorPhase_Busy );
-				setGamePhase( GamePhase_Idle );
-				resetView();
-				//setSceneIdle();
-			}
-			break;}
-
-		case GamePhase_Hit:
-			m_dTime -= Time.deltaTime;
-			if( !m_bServe ){
-				chkPitchON();
-			}
-			if( m_dTime <= 0 ){
-				setGamePhase( GamePhase_Idle );
-				resetView();
-			}
 			break;
+
+		case GamePhase_Start:
+			m_dTime -= Time.deltaTime;
+
+			procEndReq();
+			procDeviceChk();
+			procPitchON();
+			procCountDown();
+			if( !m_bServe ){
+				procEnemyServe();
+			}
+			procSensor();
+			procHitResult();
+			procSaveBin();
+			procTimeUp();
+			procCamera();
+			break;
+
 		case GamePhase_Result:
 			m_dTime -= Time.deltaTime;
 			if( m_dTime <= 0 ){
@@ -474,7 +343,281 @@ public class Analyse_Main : MonoBehaviour {
 			}
 			break;
 		}
+	}
 
+	void procEndReq()
+	{
+		if( m_nGameLimit == GameLimit_Time ){
+			if( m_fRestTime > 0 ){
+				m_fRestTime -= Time.deltaTime;
+				if( m_fRestTime < 0 )
+					m_fRestTime = 0;
+				if( m_fRestTime == 0 )
+					m_bGameEndReq = true;
+				updateRest();
+			}
+		}
+		if( !m_bGameEndReq ){
+			if( MainFrame.Key_isAlt(RawKey.C) ){
+				m_bGameEndReq = true;
+			}
+		}
+	}
+	void procDeviceChk()
+	{
+		if( m_bDeviceChk )
+			return;
+
+		if( m_nSensorPhase == SensorPhase_Ready
+#if !UNITY_EDITOR
+			&& MainFrame.W3Ctrl_getReadyOK()
+#endif
+		)
+		{
+			m_bDeviceChk = true;
+			if( m_bPhaseLog )
+				GigaTrax.Debug.Log( "DeviceReady=1" );
+		}
+	}
+	void procPitchON()
+	{
+		if( !m_bDeviceChk )
+			return;
+		if( m_bGameEndReq )
+			return;
+
+		if( !m_bPitchON && m_dTime < m_dPitchONTime ){
+			m_bPitchON = true;
+			m_bGameEndAble = false;
+
+			StartCoroutine("ShowWarning");
+			MainFrame.W3Ctrl_PitchON();
+		}
+	}
+	void procCountDown()
+	{
+		if( !m_bDeviceChk )
+			return;
+		if( !m_bServe ){
+			if( !m_bGameEndReq ){
+				if( !m_bCountDown && m_dTime <= m_dCountDown ){
+					if( m_bPhaseLog )
+						GigaTrax.Debug.Log( "startCountDown" );
+					m_bCountDown = true;
+					m_bGameEndAble = false;
+
+					//setSensorPhase( SensorPhase_StartWait );
+					if( m_nGameMode == GameMode.Random ){
+						int viewPos = UnityEngine.Random.Range(0, 2);
+						if( viewPos != m_viewPos ){
+							m_viewPos = viewPos;
+
+							switch( m_viewPos ){
+							case 2:
+								m_strDir = strLeft;
+								break;
+							case 1:
+								m_strDir = strCenter;
+								break;
+							case 0:
+								m_strDir = strRight;
+								break;
+							}
+							MainFrame.W3Ctrl_setParam( m_strLevel, m_strBounce + ":" + m_strDir );
+						}
+					}
+					resetView();
+
+					setPromp( Prompt_CountDown );
+					m_objGage.SetActive(true);
+				}
+			}
+			if( m_bCountDown ){
+				float ratio = m_dTime / m_dCountDown;
+				UnityEngine.UI.Image image = m_objGage.GetComponent<UnityEngine.UI.Image>();
+				if( ratio < 0 )
+					ratio = 0;
+				image.fillAmount = ratio;
+				//prefabSpeed.text = "ratio: " + ratio.ToString("f2");
+			}
+		}
+		else{
+			if( m_bCountDown ){
+				float num = m_dTime - SensorStartTime;
+				float den = m_dStart - SensorStartTime;
+				float ratio = num / den;
+				if( ratio < 0 )
+					ratio = 0;
+
+				UnityEngine.UI.Image image = m_objGage.GetComponent<UnityEngine.UI.Image>();
+				image.fillAmount = ratio;
+
+				if( ratio <= 0 ){
+					m_objGage.SetActive(false);
+					setPromp( Prompt_None );
+					m_bCountDown = false;
+				}
+			}
+		}
+	}
+	void procEnemyServe()
+	{
+		if( !m_bDeviceChk )
+			return;
+		if( m_bGameEndReq )
+			return;
+
+		if( !m_bEnemyServe && m_dTime < m_dEnemyServeTime ){
+			if( m_bPhaseLog )
+				GigaTrax.Debug.Log( "startEnemyServe" );
+			startEnemyServe();
+			m_bEnemyServe = true;
+			m_bGameEndAble = false;
+		}
+	}
+	void procSensor()
+	{
+		if( !m_bDeviceChk )
+			return;
+		if( m_bGameEndReq )
+			return;
+
+		if( !m_bSensorEnd && m_dTime < SensorEndTime ){
+			m_bSensorEnd = true;
+
+			if( m_bSensor ){
+				MainFrame.PVA_endBall();
+				setSensorPhase( SensorPhase_Busy );
+				m_bSensor = false;
+				//m_bGameEndAble = true;
+				m_bDeviceChk = false;
+				return;
+			}
+		}
+		if( !m_bSensorStart && m_dTime < SensorStartTime ){
+			m_bSensorStart = true;
+
+			if( !m_bSensor ){
+				MainFrame.PVA_startBall();
+				setSensorPhase( SensorPhase_Start );
+				m_bSensor = true;
+				//m_bGameEndAble = false;
+			}
+		}
+	}
+	void procHitResult()
+	{
+		if( !m_bDeviceChk )
+			return;
+
+		if( !m_bHitResult && m_nHitResult != HitResult_Wait ){
+			if( m_bSensor ){
+				MainFrame.PVA_endBall();
+				setSensorPhase( SensorPhase_Busy );
+				m_bSensor = false;
+				m_bDeviceChk = false;
+			}
+
+			setPromp( Prompt_None );
+			if( m_nHitResult == HitResult_Hit ){
+				if( m_nGameLimit == GameLimit_Ball ){
+					m_nRestBall--;
+					updateRest();
+					if( m_nRestBall <= 0 )
+						m_bGameEndReq = true;
+				}
+			}
+			m_bHitResult = true;
+		}
+	}
+	void procSaveBin()
+	{
+		if( !m_bDeviceChk )
+			return;
+
+		if( m_bHitResult )
+			return;
+
+		if( MainFrame.Key_isCtrl(RawKey.S) ){
+			if( m_bSensor ){
+				MainFrame.PVA_setInt("SaveBin", 1);
+				MainFrame.PVA_endBall();
+				setSensorPhase( SensorPhase_Busy );
+				m_bSensor = false;
+				m_bDeviceChk = false;
+			}
+		}
+	}
+	void procTimeUp()
+	{
+		if( m_dTime > 0 )
+			return;
+
+		if( m_bPhaseLog )
+			GigaTrax.Debug.Log( "time=0" );
+		if( m_bGameEndReq && m_bGameEndAble ){
+			MainFrame.W3Ctrl_setParam( "System", "Origin" );
+
+			//m_objHitInfo.SetActive( false );
+			setPromp( Prompt_Result );
+
+			if( m_bSensor ){
+				MainFrame.PVA_endBall();
+				setSensorPhase( SensorPhase_Busy );
+				m_bSensor = false;
+			}
+
+			setGamePhase( GamePhase_Result );
+			resetView();
+			return;
+		}
+
+		m_dTime = m_dStart;
+		if( m_bPhaseLog )
+			GigaTrax.Debug.Log( "time=" + m_dTime );
+		resetStart();
+
+		if( !m_bServe ){
+			m_objGage.SetActive(false);
+			setPromp( Prompt_None );
+		}
+		else{
+			resetView();
+			m_objGage.SetActive(true);
+			setPromp( Prompt_Serve );
+			m_bCountDown = true;
+		}
+
+		//if( !m_bGameEndReq )
+		//	m_bGameEndAble = true;
+		m_bGameEndAble = true;
+	}
+	void procCamera()
+	{
+		if( !m_bServe ){
+			if( m_bCountDown )
+				return;
+		}
+		else{
+		}
+
+		if( !m_bHawkeye && m_bReqHawkeye ){
+			m_bHawkeye = true;
+
+			if( !m_bServe ){
+				m_ctlCamera.setMoveFocus( new Vector3(0, 3.43f, 0), m_posHawkeye );
+				m_posLookAt = m_posHawkeye;
+				m_nLookAt = 1;
+			}
+			else{
+				m_ctlCamera.setMoveTarget( new Vector3(m_posHawkeye.x, m_fCameraPosY, m_posHawkeye.z) );
+				m_nLookAt = 2;
+
+				m_objGage.SetActive(false);
+				setPromp( Prompt_None );
+				m_bCountDown = false;
+			}
+		}
 		if( m_nLookAt == 1 ){
 			if( !m_ctlCamera.isProc() ){
 				//m_ctlCamera.setLookAround( m_posLookAt, 10.0f );
@@ -483,6 +626,21 @@ public class Analyse_Main : MonoBehaviour {
 				m_nLookAt = 2;
 			}
 		}
+	}
+
+	void resetStart(){
+		m_bReqHawkeye = false;
+		m_bHawkeye = false;
+		//m_posHawkeye = null;
+
+		m_bCountDown = false;
+		m_bSensorStart = false;
+		m_bSensorEnd = false;
+		m_bEnemyServe = false;
+		//m_bGameOneMore = true;
+		m_bPitchON = false;
+		m_bHitResult = false;
+		m_nHitResult = HitResult_Wait;
 	}
 	void startEnemyServe()
 	{
@@ -549,7 +707,7 @@ public class Analyse_Main : MonoBehaviour {
 			switch( phase ){
 			case SensorPhase_Busy: text = "Busy"; break;
 			case SensorPhase_Ready: text = "Ready"; break;
-			case SensorPhase_StartWait: text = "StartWait"; break;
+			//case SensorPhase_StartWait: text = "StartWait"; break;
 			case SensorPhase_Start: text = "Start"; break;
 			default: text = "???"; break;
 			}
@@ -564,97 +722,32 @@ public class Analyse_Main : MonoBehaviour {
 		case GamePhase_Init:
 			m_dTime = m_dInit;
 			break;
-		case GamePhase_Idle:
-			m_dTime = m_dShootInterval;
-			break;
-		case GamePhase_CountDown:
-			m_dTime = m_dCountDown;
 
-			setSensorPhase( SensorPhase_StartWait );
-			if( m_nGameMode == GameMode.Random ){
-				int viewPos = UnityEngine.Random.Range(0, 2);
-				if( viewPos != m_viewPos ){
-					m_viewPos = viewPos;
-
-					switch( m_viewPos ){
-					case 2:
-						m_strDir = strLeft;
-						break;
-					case 1:
-						m_strDir = strCenter;
-						break;
-					case 0:
-						m_strDir = strRight;
-						break;
-					}
-					MainFrame.W3Ctrl_setParam( m_strLevel, m_strBounce + ":" + m_strDir );
-				}
-			}
-			resetView();
-
-			setPromp( Prompt_CountDown );
-			m_objGage.SetActive(true);
-			m_bSensorStart = false;
-			m_bEnemyServe = false;
-			break;
 		case GamePhase_Start:
-			m_bPitchON = false;
-			m_dTime = m_dStart;
-			break;
-		case GamePhase_Hit:
-			setPromp( Prompt_None );
-			m_dTime = HitDuration;
-			break;
-		case GamePhase_Result:
-			MainFrame.W3Ctrl_setParam( "System", "Origin" );
-
-			setPromp( Prompt_Result );
-			m_dTime = m_dResultDuration;
-			break;
-		default:
 			m_dTime = 0;
+			if( m_dPitchONTime > m_dTime )
+				m_dTime = m_dPitchONTime;
+			if( SensorStartTime > m_dTime )
+				m_dTime = SensorStartTime;
+			if( m_dCountDown > m_dTime )
+				m_dTime = m_dCountDown;
+			resetStart();
+			m_bDeviceChk = false;
+			break;
+
+		case GamePhase_Result:
+			m_dTime = m_dResultDuration;
 			break;
 		}
 		if( m_bPhaseLog ){
 			string text;
 			switch( phase ){
 			case GamePhase_Init: text = "Init"; break;
-			case GamePhase_Idle: text = "Idle"; break;
-			case GamePhase_CountDown: text = "CountDown"; break;
 			case GamePhase_Start: text = "Start"; break;
-			case GamePhase_Hit: text = "Hit"; break;
 			case GamePhase_Result: text = "Result"; break;
 			default: text = "???"; break;
 			}
 			GigaTrax.Debug.Log( "Game:" + text );
-		}
-	}
-	void chkPitchON()
-	{
-		if( m_nSensorPhase != SensorPhase_Ready )
-			return;
-
-		if( !m_bPitchON ){
-			float time = m_dTime;
-			switch( m_nGamePhase ){
-			case GamePhase_Start:
-				time += (m_dShootInterval + m_dCountDown);
-				break;
-			case GamePhase_Hit:
-				time = m_dShootInterval + m_dCountDown;
-				break;
-			case GamePhase_Idle:
-				time += m_dCountDown;
-				break;
-			}
-			if( time < m_dPitchONTime ){
-				if( m_nGamePhase == GamePhase_Hit )
-					m_dTime = 0;
-
-				StartCoroutine("ShowWarning");
-				MainFrame.W3Ctrl_PitchON();
-				m_bPitchON = true;
-			}
 		}
 	}
 	public void HitGround(GameObject ball,string tag){
@@ -669,26 +762,15 @@ public class Analyse_Main : MonoBehaviour {
 					found = true;
 
 					float timeDestroy = m_dBallDestroy;
-					if( m_nGamePhase == GamePhase_Hit )
-						m_dTime = HitGroundDuration;
+					//if( m_bHit )
+					//	m_dTime = HitGroundDuration;
 
 					/*need_hawkeye? */
 					if( isNeedHawkEye( pos ) ){
 						timeDestroy += HitGroundDuration;
 
-						if( m_bServe ){
-							m_ctlCamera.setMoveTarget( new Vector3(pos.x, m_fCameraPosY, pos.z) );
-							//m_ctlCamera.setMoveFocus( new Vector3(pos.x, m_fCameraPosZ, pos.z), pos );
-							//m_ctlCamera.setTopView( pos, m_fCameraPosZ );
-							//m_ctlCamera.setZoom(14);
-							m_nLookAt = 2;
-
-						}
-						else{
-							m_ctlCamera.setMoveFocus( new Vector3(0, 3.43f, 0), pos );
-							m_posLookAt = pos;
-							m_nLookAt = 1;
-						}
+						m_bReqHawkeye = true;
+						m_posHawkeye = pos;
 					}
 					GameObject ballStamp = Instantiate(prefabBallStamp);
 					ballStamp.transform.localPosition = new Vector3(pos.x, 0.0087f, pos.z);
@@ -704,12 +786,8 @@ public class Analyse_Main : MonoBehaviour {
 						record.result = Result_Out;
 					}
 
-					int index = (m_RecordArray.Count-1) - i;
-					if( index < NumHitRecord )
-						setHitResult_( record.result, m_objHitRecord[index] );
-
-					if( m_HitInfo != null )
-						updateHitInfo( record.result );
+					//setHitResult_( record.result );
+					updateHitInfo( record.result );
 
 					//GameObject ballEffect = Instantiate(prefabBallEffect);
 					//ballEffect.transform.localPosition = new Vector3(pos.x, 0.05f, pos.z);
@@ -720,13 +798,8 @@ public class Analyse_Main : MonoBehaviour {
 					break;
 				}
 			}
-			if( !found )
-				return;
-
-			if( m_HitInfo != null ){
-				Destroy( m_HitInfo, HitInfoDuration );
-				m_HitInfo = null;
-			}
+			//if( !found )
+			//	return;
 		}
 		else if( tag == "Net" ){
 			Rigidbody rb = ball.GetComponent<Rigidbody>();
@@ -778,8 +851,8 @@ public class Analyse_Main : MonoBehaviour {
 	}
 	bool isNeedHawkEye(Vector3 pos)
 	{
-		if( m_bUseDizzView )
-			return false;
+		//if( m_bUseDizzView )
+		//	return false;
 
 		Vector2 pos2D = new Vector2(pos.x, pos.z);
 		Vector2 p0 = new Vector2( m_fMinX, m_fMinZ );
@@ -816,38 +889,6 @@ public class Analyse_Main : MonoBehaviour {
 	}
 
 /*HitRecord*/
-	void initHitRecord(){
-		m_objHitRecord = new GameObject[NumHitRecord];
-
-		float y = HitRecordPosY;
-		for(int i = 0; i < NumHitRecord; i++){
-			GameObject obj = Instantiate(prefabHitRecord);
-			obj.transform.localPosition = new Vector3(HitRecordPosX, y, 0);
-			obj.transform.SetParent(m_objInfo2.transform, false);
-			obj.SetActive(false);
-
-			m_objHitRecord[i] = obj;
-			y -= HitRecordHeight;
-		}
-	}
-	void updateHitRecord(){
-		int num = m_RecordArray.Count;
-		int end = num-1;
-		if( num > NumHitRecord )
-			num = NumHitRecord;
-		for(int i = 0; i < num; i++){
-			HitRecord record = m_RecordArray[end-i];
-			GameObject obj = m_objHitRecord[i];
-			obj.SetActive(true);
-
-			GameObject objNo = obj.transform.Find("no").gameObject;
-			Text txNo = objNo.GetComponent<Text>();
-			txNo.text = record.nNo.ToString();
-
-			setHitSpeed_(record, obj);
-			setHitResult_( record.result, obj );
-		}
-	}
 	HitRecord addHitRecord(){
 		HitRecord record = new HitRecord();
 
@@ -861,41 +902,17 @@ public class Analyse_Main : MonoBehaviour {
 		m_RecordArray.Add( record );
 		return record;
 	}
-	void setHitSpeed_(HitRecord record,GameObject obj){
-		GameObject objSpeed = obj.transform.Find("speed").gameObject;
-		GameObject objSpeedUnit = obj.transform.Find("speed_unit").gameObject;
-
-		string text = "";
-		if( record.speed >= 0 ){
-			text = ((int)record.speed).ToString();
-		}
-		objSpeed.SetActive( true );
-		objSpeedUnit.SetActive( true );
-
-		Text txSpeed = objSpeed.GetComponent<Text>();
-		txSpeed.text = text;
-	}
-	void setHitResult_(int result,GameObject obj){
-		GameObject objResult = obj.transform.Find("result").gameObject;
-
-		Text txResult = objResult.GetComponent<Text>();
-		txResult.text = getHitResult_( result );
-	}
 	void addHitInfo(GameObject ball,float speed){
 		int ispeed = (int)speed;
 
-		GameObject objInfo;
-		objInfo = Instantiate(prefabHitInfo);
-		objInfo.transform.SetParent(prefabMainCanvas.transform, false);
-
-		GameObject objText = objInfo.transform.Find("speed").gameObject;
+		GameObject objText = m_objHitInfo.transform.Find("speed").gameObject;
 		TextMeshProUGUI tx1 = objText.GetComponent<TextMeshProUGUI>();
 		tx1.text = ispeed.ToString();
 
-		m_HitInfo = objInfo;
+		StartCoroutine("ShowHitInfo");
 	}
 	void updateHitInfo(int result){
-		GameObject objText = m_HitInfo.transform.Find("result").gameObject;
+		GameObject objText = m_objHitInfo.transform.Find("result").gameObject;
 		TextMeshProUGUI tx1 = objText.GetComponent<TextMeshProUGUI>();
 		tx1.text = getHitResult_( result );
 	}
@@ -916,8 +933,8 @@ public class Analyse_Main : MonoBehaviour {
 		return text;
 	}
 	void resetView(){
-		if( m_bUseDizzView )
-			return;
+		//if( m_bUseDizzView )
+		//	return;
 		m_ctlCamera.clear();
 
 		Vector3 pos = new Vector3(0, m_fCameraPosY, m_fCameraPosZ);
@@ -1000,6 +1017,13 @@ public class Analyse_Main : MonoBehaviour {
 		yield return new WaitForSeconds( ShowWarningTime );
 
 		m_objWarning.SetActive(false);
+	}
+	IEnumerator ShowHitInfo(){
+		m_objHitInfo.SetActive(true);
+
+		yield return new WaitForSeconds( ShowHitInfoTime );
+
+		m_objHitInfo.SetActive(false);
 	}
 	void setPromp(int value)
 	{
@@ -1087,8 +1111,6 @@ public class Analyse_Main : MonoBehaviour {
 	public GameObject prefabBallHit;
 	public GameObject prefabBallEffect;
 	public GameObject prefabBallStamp;
-	public GameObject prefabHitRecord;
-	public GameObject prefabHitInfo;
 	public GameObject prefabEnemyPos;
 	public GameObject prefabMachine;
 	public GameObject prefabDizzView;
@@ -1111,19 +1133,15 @@ public class Analyse_Main : MonoBehaviour {
 	private int m_nBallLimit = 0;
 	private int m_nRestBall = 0;
 
-	private GameObject[] m_objHitRecord;
+	//private GameObject[] m_objHitRecord;
 
 	private const int GamePhase_Init        = 0;
-	private const int GamePhase_Idle        = 1;
-	private const int GamePhase_CountDown   = 2;
-	private const int GamePhase_Start       = 3;
-	private const int GamePhase_Hit         = 4;
-	private const int GamePhase_Result      = 5;
+	private const int GamePhase_Start       = 2;
+	private const int GamePhase_Result      = 3;
 
 	private const int SensorPhase_Busy      = 0;
 	private const int SensorPhase_Ready     = 1;
-	private const int SensorPhase_StartWait = 2;
-	private const int SensorPhase_Start     = 3;
+	private const int SensorPhase_Start     = 2;
 
 	private const int NumHitRecord = 20;
 
@@ -1150,7 +1168,7 @@ public class Analyse_Main : MonoBehaviour {
 	private float m_dEnemyServeTime = 1;
 	private float m_dBallDestroy = 1;
 	private float m_dInit = 0;
-	private float m_dShootInterval = 2;
+	private const float SensorEndTime = 1;
 	//private const float EnemyServeTime = 0.5f;
 	//private const float SensorStartTime = 3;
 	//private const float SensorStartTime = 2;
@@ -1158,15 +1176,14 @@ public class Analyse_Main : MonoBehaviour {
 	private float m_dPitchONTime = 0.5f;
 	private const float StartDuration = 5.0f;
 	private float m_dResultDuration = 10;
+	//private const float ShowHitInfoTime = 3.0f;
+	private const float ShowHitInfoTime = 2.5f;
 	//private const float ShowWarningTime = 2.0f;
 	private const float ShowWarningTime = 1.0f;
 	//private const float MainSpeedLife = 3;
 	//private const float MainSpeedScale = 1.2f;
 	//private const float HitGroundDuration = 2.0f;
 	private const float HitGroundDuration = 3.0f;
-	private const float HitDuration = 5.0f;
-	//private const float HitInfoDuration = 3.0f;
-	private const float HitInfoDuration = 2.5f;
 	//private const float HitRecordPosX = 10.0f;
 	private const float HitRecordPosX = 0;
 	//private const float HitRecordPosY = -410.0f;
@@ -1198,7 +1215,7 @@ public class Analyse_Main : MonoBehaviour {
 	private string m_strLevel;
 
 	private GigaTrax.PVA.DetectNotify m_detect = new GigaTrax.PVA.DetectNotify();
-	private GameObject m_objInfo2;
+	private GameObject m_objHitInfo = null;
 	private GameObject m_objGage = null;
 	private GameObject m_objReady = null;
 	private GameObject m_objResult = null;
@@ -1227,21 +1244,37 @@ public class Analyse_Main : MonoBehaviour {
 	private ShootController m_ShootController = new ShootController();
 
 	private List<HitRecord> m_RecordArray = new List<HitRecord>();
-	private GameObject m_HitInfo = null;
+	//private GameObject m_HitInfo = null;
 
-	private bool m_bGameEnd = false;
+	private const int HitResult_Wait        = 0;
+	private const int HitResult_Hit         = 1;
+	private const int HitResult_Fail        = 2;
+
+	//private bool m_bHit = false;
+	//private Vector3 m_posHawkeye = null;
+	private Vector3 m_posHawkeye;
+	private int m_nHitResult = HitResult_Wait;
+	private bool m_bReqHawkeye = false;
+	private bool m_bHawkeye = false;
+	private bool m_bDeviceChk = false; /*センサや機器が準備OKかどうか*/
+	private bool m_bCountDown = false;
+	private bool m_bGameEndReq = false;
+	private bool m_bGameEndAble = true; /*機器等を動作させた時 終了しないようにする*/
 	private bool m_bEnemyServe = false;
 	private bool m_bSensorStart = false;
+	private bool m_bSensorEnd = false;
+	private bool m_bSensor = false;
+	private bool m_bHitResult = false;
 	private bool m_bPitchON = false;
 	private bool m_bPhaseLog = true;
 	private int m_nGamePhase;
 	private int m_nSensorPhase;
 	private int m_nPrompt;
 	private float m_dTime = 0;
-	private float m_dCountDown = 0;
+	private float m_dCountDown = 1;
 	private float m_dStart = 0;
 	private bool m_bCtrlPower = false;
-	private bool m_bUseDizzView = false;
+	//private bool m_bUseDizzView = false;
 	private bool m_bServe = true;
 	//private float m_posSysInfo = 0;
 }

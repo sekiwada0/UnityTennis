@@ -30,6 +30,20 @@ public class MainFrame : MonoBehaviour {
 
 	// Use this for initialization
 	void Start(){
+		Display.displays[0].Activate();
+		if( Display.displays.Length > 1 )
+			Display.displays[1].Activate();
+
+/*
+		Display.displays[0].Activate();
+		if( Display.displays.Length > 1 )
+			Display.displays[1].Activate();
+		// Display.displays[0] は主要デフォルトディスプレイで、常に ON。
+		// 追加ディスプレイが可能かを確認し、それぞれをアクティベートします。
+		//if( Display.displays.Length > 2 )
+		//	Display.displays[2].Activate();
+*/
+
 		try
 		{
 			string i_path = Application.dataPath + "/XML/Settings.xml"; /*NG*/
@@ -242,6 +256,7 @@ public class MainFrame : MonoBehaviour {
 	}
 	private bool W3Ctrl_getTouchCard_(){ return m_W3Ctrl.TouchCard; }
 	private void W3Ctrl_clearTouchCard_(){ m_W3Ctrl.TouchCard = false; }
+	private bool W3Ctrl_getReadyOK_(){ return m_W3Ctrl.ReadyOK; }
 	/*private void W3Ctrl_Speed_(int v1,int v2,int v3){
 		m_W3Ctrl.Wheel1 = v1;
 		m_W3Ctrl.Wheel2 = v2;
@@ -462,6 +477,11 @@ public class MainFrame : MonoBehaviour {
 		if( instance == null )
 			return;
 		instance.W3Ctrl_clearTouchCard_();
+	}
+	public static bool W3Ctrl_getReadyOK(){
+		if( instance == null )
+			return false;
+		return instance.W3Ctrl_getReadyOK_();
 	}
 
 /*PlayInfo*/

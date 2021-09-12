@@ -80,7 +80,8 @@ public class GameOver : MonoBehaviour {
 		SceneManager.LoadScene( strDemoScene );
 	}
 	//private const string strDemoScene = "AnalyseDemo3";
-	private const string strDemoScene = "AnalyseMenu";
+	//private const string strDemoScene = "AnalyseMenu";
+	private const string strDemoScene = "AnalyseMenu2";
 
 	private VideoPlayer m_videoPlayer = null;
 	private AudioSource m_audioSource = null;

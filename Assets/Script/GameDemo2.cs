@@ -1,4 +1,5 @@
 ﻿/*
+2画面用
 https://blog.applibot.co.jp/2018/05/25/how-to-use-unity-videoplayer/
 */
 using UnityEngine;
@@ -9,7 +10,7 @@ using System.Collections;
 using System.Collections.Generic;
 //using GigaTrax;
 
-public class GameDemo : MonoBehaviour {
+public class GameDemo2 : MonoBehaviour {
 	// Use this for initialization
 	void Start(){
 		/*Display.displays[0].Activate();
